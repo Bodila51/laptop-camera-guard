@@ -2,7 +2,7 @@
 # camera/microphone access, remote access and autostarts. Every printed line is a real check on this machine.
 # Changes nothing. Usage: powershell -ExecutionPolicy Bypass -File scan-live.ps1 [-Delay 8]
 param([int]$Delay = 8, [switch]$Demo)
-# -Demo: draw blurred example frames (demo images from the repo, not findings from this machine) between sections.
+# -Demo: draw your own photos from Desktop\camera-photos between sections (demo frames, not findings from this machine).
 
 $ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = 'camera-guard'
@@ -15,16 +15,26 @@ function Line($tag, $text, $color = 'Gray') {
     Write-Host (Mask $text) -ForegroundColor $color
     if ($Delay -gt 0) { Start-Sleep -Milliseconds $Delay }
 }
-$arts = @()
-if ($Demo) {
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
-    $ad = Join-Path $env:TEMP 'camera-guard-demo'; New-Item -ItemType Directory -Force $ad | Out-Null
-    $arts = foreach ($n in 1..4) {
-        $af = Join-Path $ad "example_0$n.ans"
-        if (-not (Test-Path $af)) { try { Invoke-WebRequest "https://raw.githubusercontent.com/Bodila51/laptop-camera-guard/main/skills/camera-guard/demo/example_0$n.ans" -OutFile $af -UseBasicParsing } catch {} }
-        if (Test-Path $af) { [IO.File]::ReadAllText($af, [Text.Encoding]::UTF8) }
+# Blurred frames come from your own photos in Desktop\camera-photos (jpg/png); nothing is downloaded.
+Add-Type -AssemblyName System.Drawing
+function ToArt($path) {
+    try { $img = [Drawing.Image]::FromFile($path) } catch { return }
+    $W = 110; $H = 62; $e = [char]27; $hb = [char]0x2580
+    $bm = New-Object Drawing.Bitmap $W, $H; $g = [Drawing.Graphics]::FromImage($bm); $g.InterpolationMode = 'HighQualityBicubic'; $g.DrawImage($img, 0, 0, $W, $H); $g.Dispose(); $img.Dispose()
+    $sb = New-Object Text.StringBuilder
+    for ($y = 0; $y -lt $H; $y += 2) {
+        for ($x = 0; $x -lt $W; $x++) {
+            $a = $bm.GetPixel($x, $y); $b = $bm.GetPixel($x, $y + 1)
+            $v = foreach ($c in $a.R, $a.G, $a.B, $b.R, $b.G, $b.B) { [int][Math]::Min(255, [Math]::Pow($c / 255.0, 0.75) * 255 * 1.35) }
+            [void]$sb.Append("$e[38;2;$($v[0]);$($v[1]);$($v[2])m$e[48;2;$($v[3]);$($v[4]);$($v[5])m$hb")
+        }
+        [void]$sb.Append("$e[0m`n")
     }
+    $bm.Dispose(); $sb.ToString()
 }
+$photos = Join-Path ([Environment]::GetFolderPath('Desktop')) 'camera-photos'
+$arts = @()
+if ($Demo) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $arts = @(Get-ChildItem $photos -File | Where-Object Extension -match '^\.(jpe?g|png|bmp)$' | ForEach-Object { ToArt $_.FullName }) }
 $script:sec = 0
 # With -Demo, a blurred example frame is drawn in the terminal before every second section.
 function Head($text) {
@@ -34,7 +44,7 @@ function Head($text) {
 }
 function FT($v) { if ($v -and [int64]$v -gt 0) { [DateTime]::FromFileTime([int64]$v).ToString('yyyy-MM-dd HH:mm') } else { '-' } }
 
-$found = [ordered]@{ camera = 0; mic = 0; suspicious = 0; remote = 0; unsigned = 0 }
+$found = [ordered]@{ camera = 0; mic = 0; suspicious = 0; remote = 0; unsigned = 0; images = 0 }
 Clear-Host
 Write-Host "camera-guard  В·  who has been using your camera and microphone" -ForegroundColor Yellow
 Write-Host "read-only scan В· nothing is changed" -ForegroundColor DarkGray
@@ -122,6 +132,43 @@ Get-ChildItem "$env:LOCALAPPDATA\Google\Chrome\User Data\*\Preferences", "$env:L
     }
 }
 
+Head 'Webcam-sized images in hidden / temp folders (shown here only, never sent anywhere)'
+Add-Type -AssemblyName System.Drawing
+# Draws an image in the terminal with coloured half-blocks.
+function Show-Image($path) {
+    try { $img = [Drawing.Image]::FromFile($path) } catch { return }
+    $W = 110; $H = 62; $e = [char]27; $hb = [char]0x2580
+    $bm = New-Object Drawing.Bitmap $W, $H; $g = [Drawing.Graphics]::FromImage($bm); $g.InterpolationMode = 'HighQualityBicubic'; $g.DrawImage($img, 0, 0, $W, $H); $g.Dispose(); $img.Dispose()
+    $sb = New-Object Text.StringBuilder
+    for ($y = 0; $y -lt $H; $y += 2) {
+        for ($x = 0; $x -lt $W; $x++) { $a = $bm.GetPixel($x, $y); $b = $bm.GetPixel($x, $y + 1); [void]$sb.Append("$e[38;2;$($a.R);$($a.G);$($a.B)m$e[48;2;$($b.R);$($b.G);$($b.B)m$hb") }
+        [void]$sb.Append("$e[0m`n")
+    }
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::Write($sb.ToString()); $bm.Dispose()
+}
+$camSizes = '640x480', '320x240', '800x600', '1280x720', '1280x960', '1920x1080', '1280x800', '1600x1200'
+$roots = $env:TEMP, $env:APPDATA, $env:LOCALAPPDATA, $env:ProgramData, $env:PUBLIC
+$skipDir = '^(Cache|Code Cache|GPUCache|Thumbnails|Icons|IconCache|Packages|Google|Mozilla|NVIDIA|NVIDIA Corporation|Steam|npm-cache|pip|Temp|node_modules|\.git|camera-guard.*)$'
+# Walks folders (max 5 deep, skipping known caches) and yields recent media files, fast.
+function Find-Media($dir, $depth) {
+    try { foreach ($f in [IO.Directory]::EnumerateFiles($dir)) {
+        if ($f -match '\.(jpe?g|png|bmp|avi|mp4|wav|webm)$') { $i = New-Object IO.FileInfo $f; if ($i.LastWriteTime -gt (Get-Date).AddDays(-60)) { $i } } } } catch {}
+    if ($depth -ge 5) { return }
+    try { foreach ($d in [IO.Directory]::EnumerateDirectories($dir)) {
+        if ((Split-Path $d -Leaf) -notmatch $skipDir) { Find-Media $d ($depth + 1) } } } catch {}
+}
+$shown = 0
+$media = foreach ($r in $roots) { Find-Media $r 0 }
+foreach ($m in $media) {
+    if ($m.Extension -match 'avi|mp4|wav|webm') { Line 'MEDIA' ("{0}  {1:N0} KB  {2}" -f $m.FullName, ($m.Length / 1KB), $m.LastWriteTime.ToString('yyyy-MM-dd HH:mm')) 'Yellow'; continue }
+    if ($m.Length -lt 15KB) { continue }
+    try { $fs = [IO.File]::OpenRead($m.FullName); $im = [Drawing.Image]::FromStream($fs, $false, $false); $size = "$($im.Width)x$($im.Height)"; $im.Dispose(); $fs.Dispose() } catch { continue }
+    if ($camSizes -notcontains $size) { Line 'IMAGE' ("{0}  {1}  (not a webcam size)" -f $m.FullName, $size) 'DarkGray'; continue }
+    $found.images++
+    Line 'IMAGE' ("{0}  {1}  {2}  webcam-sized image in a hidden folder - check it" -f $m.FullName, $size, $m.LastWriteTime.ToString('yyyy-MM-dd HH:mm')) 'Red'
+    if ($shown -lt 8) { Show-Image $m.FullName; $shown++ }
+}
+
 Head 'Windows Defender history'
 $d = Get-MpThreatDetection
 Line 'DEFENDER' ("detections on record: {0}" -f @($d).Count) ($(if (@($d).Count) { 'Red' } else { 'Green' }))
@@ -132,5 +179,6 @@ Write-Host ("apps that used the camera:      {0}" -f $found.camera) -ForegroundC
 Write-Host ("apps that used the microphone:  {0}" -f $found.mic) -ForegroundColor White
 Write-Host ("remote-access sessions logged:  {0}" -f $found.remote) -ForegroundColor ($(if ($found.remote) { 'Red' } else { 'Green' }))
 Write-Host ("unsigned programs running/auto: {0}" -f $found.unsigned) -ForegroundColor ($(if ($found.unsigned) { 'Yellow' } else { 'Green' }))
+Write-Host ("webcam-sized hidden images:     {0}" -f $found.images) -ForegroundColor ($(if ($found.images) { 'Red' } else { 'Green' }))
 Write-Host ("suspicious camera/mic entries:  {0}" -f $found.suspicious) -ForegroundColor ($(if ($found.suspicious) { 'Red' } else { 'Green' }))
 Write-Host "Note: this shows who accessed the camera/mic and when. It cannot prove nobody ever did." -ForegroundColor DarkGray
