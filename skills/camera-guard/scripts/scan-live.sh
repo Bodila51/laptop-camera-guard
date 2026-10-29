@@ -13,7 +13,7 @@ REPO=https://raw.githubusercontent.com/Bodila51/laptop-camera-guard/main/skills/
 
 C0=$'\e[0m'; GRAY=$'\e[90m'; CYAN=$'\e[36m'; RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'
 MAG=$'\e[35m'; WHITE=$'\e[97m'; DCYAN=$'\e[2;36m'; DYEL=$'\e[2;33m'
-mask() { sed -E "s#$HOME#~#g; s/\b([0-9]{1,3}\.){3}[0-9]{1,3}\b/<ip>/g; s/\b[0-9]{9,10}\b/<id>/g"; }
+mask() { sed -E "s#$HOME#~#g; s/([0-9]{1,3}\.){3}[0-9]{1,3}/<ip>/g; s/[0-9]{9,10}/<id>/g"; }
 line() { # tag colour text
   printf '%s%s %s[%-8s] %s%s%s\n' "$GRAY" "$(date +%H:%M:%S)" "$CYAN" "$1" "$2" "$(printf '%s' "$3" | mask)" "$C0"
   sleep "$DELAY"
