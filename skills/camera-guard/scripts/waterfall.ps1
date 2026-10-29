@@ -21,6 +21,7 @@ $script:i = 0; $script:k = 0; $sw = [Diagnostics.Stopwatch]::StartNew()
 $camDll = '^(mf|ksproxy|avicap|vidcap|frameserver|windows\.media\.capture|audioses|mmdevapi|wasapi|ksuser)'
 function Emit($tag, $text, $col = 'Gray') {
     $text = ($text -replace $home_, '~') -replace '\b(\d{1,3}\.){3}\d{1,3}\b', '<ip>'
+    $w = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 24); if ($text.Length -gt $w) { $text = $text.Substring(0, $w) }
     Write-Host ((Get-Date).ToString('HH:mm:ss.fff') + ' ') -NoNewline -ForegroundColor DarkGray
     Write-Host ("[{0,-7}] " -f $tag) -NoNewline -ForegroundColor Cyan
     Write-Host $text -ForegroundColor $col
