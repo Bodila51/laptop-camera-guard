@@ -25,7 +25,6 @@ while ($true) {
         if ($Every -gt 0 -and $arts -and $sw.Elapsed.TotalSeconds -ge $Every) {
             $k++
             Write-Host ""
-            Write-Host ("[CAM ] webcam_capture_{0:D2}.jpg   EXAMPLE - demo frame, not from this computer" -f $k) -ForegroundColor Red
             [Console]::Write($arts[$k % @($arts).Count])
             Start-Sleep -Milliseconds 1500
             $sw.Restart()
