@@ -2,8 +2,7 @@
 # camera-guard live scan for macOS: a fast, colourful, READ-ONLY walk through the places macOS keeps traces of
 # camera/microphone access, remote access and autostarts. Every printed line is a real check on this Mac.
 # Changes nothing. Usage: bash scan-live.sh [--delay 0.01] [--demo]
-# --demo: after the real scan, show clearly-labelled EXAMPLE images (from ~/.camera-guard/demo/, downloaded from
-# the repo if empty) to illustrate what a webcam-capture finding would look like. They are not findings from this Mac.
+# --demo: draw blurred example frames (demo images from the repo, not findings from this Mac) between sections.
 
 DELAY=0.01; DEMO=0
 while [ $# -gt 0 ]; do
@@ -18,7 +17,17 @@ line() { # tag colour text
   printf '%s%s %s[%-8s] %s%s%s\n' "$GRAY" "$(date +%H:%M:%S)" "$CYAN" "$1" "$2" "$(printf '%s' "$3" | mask)" "$C0"
   sleep "$DELAY"
 }
-head_() { echo; echo "${MAG}>>> $1${C0}"; sleep 0.15; }
+SEC=0; ART=()
+if [ "$DEMO" = 1 ]; then
+  AD="${TMPDIR:-/tmp}/camera-guard-demo"; mkdir -p "$AD"; SUF=.256.ans; [ "$COLORTERM" = truecolor ] && SUF=.ans
+  for n in 1 2 3 4; do [ -s "$AD/example_0$n$SUF" ] || curl -fsSL "$REPO/example_0$n$SUF" -o "$AD/example_0$n$SUF"; ART+=("$AD/example_0$n$SUF"); done
+fi
+# With --demo, a blurred example frame is drawn in the terminal before every second section.
+head_() {
+  SEC=$((SEC+1))
+  if [ ${#ART[@]} -gt 0 ] && [ $((SEC % 2)) = 0 ]; then echo; cat "${ART[$(( (SEC/2) % ${#ART[@]} ))]}"; sleep 1.5; fi
+  echo; echo "${MAG}>>> $1${C0}"; sleep 0.15
+}
 CAM=0; MIC=0; REMOTE=0; UNSIGNED=0; SUSP=0
 
 clear
@@ -101,12 +110,3 @@ echo "${WHITE}apps allowed the microphone:    $MIC${C0}"
 [ "$UNSIGNED" -gt 0 ] && c=$YELLOW || c=$GREEN; echo "${c}unverified autostart items:     $UNSIGNED${C0}"
 [ "$SUSP" -gt 0 ] && c=$RED || c=$GREEN; echo "${c}suspicious camera/mic entries:  $SUSP${C0}"
 echo "${GRAY}Note: this shows who accessed the camera/mic and when. It cannot prove nobody ever did.${C0}"
-
-if [ "$DEMO" = 1 ]; then
-  dir="$HOME/.camera-guard/demo"; mkdir -p "$dir"
-  ls "$dir"/*.jpg >/dev/null 2>&1 || for n in 1 2 3 4; do curl -fsSL "$REPO/example_0$n.jpg" -o "$dir/example_0$n.jpg"; done
-  echo
-  echo "${RED}EXAMPLE ONLY: what a webcam-capture finding would look like (demo images, not from this Mac)${C0}"
-  for f in "$dir"/*.jpg "$dir"/*.png; do [ -e "$f" ] && { line EXAMPLE "$RED" "webcam_capture_$(basename "${f%.*}").jpg  (demo)"; sleep 0.25; }; done
-  open -a Preview "$dir"/*.jpg 2>/dev/null
-fi
