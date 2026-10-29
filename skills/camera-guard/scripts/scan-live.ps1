@@ -1,4 +1,4 @@
-# camera-guard live scan: a fast, colourful, READ-ONLY walk through every place Windows keeps traces of
+﻿# camera-guard live scan: a fast, colourful, READ-ONLY walk through every place Windows keeps traces of
 # camera/microphone access, remote access and autostarts. Every printed line is a real check on this machine.
 # Changes nothing. Usage: powershell -ExecutionPolicy Bypass -File scan-live.ps1 [-Delay 8]
 param([int]$Delay = 8, [switch]$Demo)
@@ -21,8 +21,8 @@ function FT($v) { if ($v -and [int64]$v -gt 0) { [DateTime]::FromFileTime([int64
 
 $found = [ordered]@{ camera = 0; mic = 0; suspicious = 0; remote = 0; unsigned = 0 }
 Clear-Host
-Write-Host "camera-guard  ·  who has been using your camera and microphone" -ForegroundColor Yellow
-Write-Host "read-only scan · nothing is changed" -ForegroundColor DarkGray
+Write-Host "camera-guard  В·  who has been using your camera and microphone" -ForegroundColor Yellow
+Write-Host "read-only scan В· nothing is changed" -ForegroundColor DarkGray
 
 Head 'Camera & microphone devices'
 Get-PnpDevice -Class Camera, Image, AudioEndpoint -ErrorAction SilentlyContinue | ForEach-Object {
@@ -120,16 +120,56 @@ Write-Host ("unsigned programs running/auto: {0}" -f $found.unsigned) -Foregroun
 Write-Host ("suspicious camera/mic entries:  {0}" -f $found.suspicious) -ForegroundColor ($(if ($found.suspicious) { 'Red' } else { 'Green' }))
 Write-Host "Note: this shows who accessed the camera/mic and when. It cannot prove nobody ever did." -ForegroundColor DarkGray
 
+# Draws blurred "person in a room" placeholders (tiny sketch upscaled = blur), each stamped EXAMPLE.
+function New-DemoImages($dir) {
+    Add-Type -AssemblyName System.Drawing
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    $rnd = New-Object Random 7
+    for ($n = 1; $n -le 4; $n++) {
+        $s = New-Object Drawing.Bitmap 320, 180
+        $g = [Drawing.Graphics]::FromImage($s)
+        $g.SmoothingMode = 'AntiAlias'; $g.ScaleTransform(5, 5)
+        $g.Clear([Drawing.Color]::FromArgb(255, 34 + $rnd.Next(25), 30 + $rnd.Next(15), 28))
+        $lx = $rnd.Next(4, 58)
+        $g.FillEllipse((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(200, 255, 196, 120))), $lx - 7, 1, 14, 14)
+        $g.FillRectangle((New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 18, 16, 16))), 0, 31, 64, 5)
+        $px = $rnd.Next(22, 42)
+        $glow = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(90, 120, 160, 255))
+        $b = New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(255, 14, 12, 16))
+        $g.FillEllipse($glow, $px - 9, 5, 18, 22)
+        $g.FillEllipse($b, $px - 4, 9, 8, 10)
+        $g.FillEllipse($b, $px - 13, 18, 26, 24)
+        $g.Dispose()
+        $big = New-Object Drawing.Bitmap 1280, 720
+        $g = [Drawing.Graphics]::FromImage($big)
+        $g.InterpolationMode = 'HighQualityBicubic'
+        # blur: shrink hard, then grow back in two smooth steps
+        $t = New-Object Drawing.Bitmap 24, 14; $gt = [Drawing.Graphics]::FromImage($t); $gt.InterpolationMode = 'HighQualityBicubic'; $gt.DrawImage($s, 0, 0, 24, 14); $gt.Dispose()
+        $m = New-Object Drawing.Bitmap 160, 90; $gm = [Drawing.Graphics]::FromImage($m); $gm.InterpolationMode = 'HighQualityBicubic'; $gm.DrawImage($t, -4, -4, 168, 98); $gm.Dispose()
+        $g.DrawImage($m, -30, -30, 1340, 780)
+        for ($k = 0; $k -lt 6000; $k++) {
+            $v = $rnd.Next(0, 60)
+            $big.SetPixel($rnd.Next(1280), $rnd.Next(720), [Drawing.Color]::FromArgb(255, $v, $v, $v))
+        }
+        $f1 = New-Object Drawing.Font('Consolas', 20, [Drawing.FontStyle]::Bold)
+        $g.DrawString(("CAM0  {0}" -f (Get-Date).AddDays(-$n).ToString('yyyy-MM-dd  0' + (1 + $n) + ':mm:ss')), $f1, [Drawing.Brushes]::White, 24, 660)
+        $g.DrawString('EXAMPLE - not real footage', $f1, [Drawing.Brushes]::Red, 24, 22)
+        $g.Dispose()
+        $big.Save((Join-Path $dir ("example_0$n.jpg")), [Drawing.Imaging.ImageFormat]::Jpeg)
+    }
+}
+
 if ($Demo) {
     $dir = Join-Path $env:USERPROFILE '.camera-guard\demo'
     $imgs = Get-ChildItem $dir -Include *.jpg, *.jpeg, *.png -Recurse
+    if (-not $imgs) { New-DemoImages $dir; $imgs = Get-ChildItem $dir -Include *.jpg, *.jpeg, *.png -Recurse }
     Write-Host ""
     Write-Host "EXAMPLE ONLY: what a webcam-capture finding would look like (demo images, not from this PC)" -ForegroundColor Red
     foreach ($i in $imgs) { Line 'EXAMPLE' ("webcam_capture_{0}.jpg  (demo)" -f $i.BaseName) 'Red'; Start-Sleep -Milliseconds 250 }
     if ($imgs) {
         Add-Type -AssemblyName System.Windows.Forms, System.Drawing
         $f = New-Object Windows.Forms.Form
-        $f.Text = 'camera-guard · EXAMPLE'; $f.BackColor = 'Black'; $f.WindowState = 'Maximized'; $f.FormBorderStyle = 'None'; $f.KeyPreview = $true
+        $f.Text = 'camera-guard В· EXAMPLE'; $f.BackColor = 'Black'; $f.WindowState = 'Maximized'; $f.FormBorderStyle = 'None'; $f.KeyPreview = $true
         $f.Add_KeyDown({ $f.Close() }); $f.Add_Click({ $f.Close() })
         $flow = New-Object Windows.Forms.FlowLayoutPanel; $flow.Dock = 'Fill'; $flow.BackColor = 'Black'
         foreach ($i in $imgs) {
@@ -139,7 +179,7 @@ if ($Demo) {
             $flow.Controls.Add($pb)
         }
         $lbl = New-Object Windows.Forms.Label
-        $lbl.Text = 'EXAMPLE · demo images · not from this computer'; $lbl.ForeColor = 'Red'; $lbl.BackColor = 'Black'
+        $lbl.Text = 'EXAMPLE В· demo images В· not from this computer'; $lbl.ForeColor = 'Red'; $lbl.BackColor = 'Black'
         $lbl.Font = New-Object Drawing.Font('Segoe UI', 18, [Drawing.FontStyle]::Bold); $lbl.Dock = 'Bottom'; $lbl.Height = 50; $lbl.TextAlign = 'MiddleCenter'
         $f.Controls.Add($flow); $f.Controls.Add($lbl)
         [void]$f.ShowDialog()
