@@ -70,6 +70,22 @@ Always end the verdict with the honest note from the ground rules. Do not claim 
 
 ## Lock-down options (each only after the user says yes)
 
+### 0. Find the exact laptop model first (no need to ask the user)
+- Windows: `Get-CimInstance Win32_ComputerSystem | Select Manufacturer, Model` and
+  `(Get-CimInstance Win32_ComputerSystemProduct).Version` (Lenovo puts the marketing name here, e.g. "LOQ 15IAX9").
+  BIOS vendor/version: `Get-CimInstance Win32_BIOS | Select Manufacturer, SMBIOSBIOSVersion`.
+- macOS: `system_profiler SPHardwareDataType` (Model Name / Model Identifier).
+Then look up THAT model's official user guide / BIOS manual (manufacturer's support site) and tell the user exactly
+which of these it has, with the menu path or location, and say clearly what it does NOT have:
+- a BIOS/UEFI option to disable the camera and/or microphone (common on business lines: ThinkPad, Dell Latitude/XPS,
+  HP EliteBook; often missing on consumer/gaming lines such as Lenovo IdeaPad/LOQ/Legion);
+- a physical shutter or an electronic shutter switch (e.g. Lenovo LOQ: camera shutter switch on the right side);
+- a camera kill key (often F8/F9 or Fn+F8 with a crossed-out camera icon);
+- the vendor app privacy mode (e.g. Lenovo Vantage > Device > Display & Camera > Camera Privacy Mode).
+Never claim a BIOS option exists unless the model's manual confirms it; otherwise tell the user how to check
+(e.g. Lenovo consumer: F2 at boot; ThinkPad: F1; Dell: F2; HP: F10) and what to look for ("Camera", "Integrated Camera", "I/O Port Access").
+The strongest options, in order: BIOS disable (with a BIOS password) or a hardware shutter switch > Device Manager disable > app permissions.
+
 1. Per-app camera/mic permissions (Windows Settings > Privacy & security; macOS Privacy & Security).
 2. Browser site permissions (Chrome: Settings > Privacy and security > Site settings > Camera / Microphone; remove unexpected sites).
 3. Windows Device Manager > Cameras > Disable device (reversible).
