@@ -1,0 +1,4 @@
+audit.json
+reports/
+*.report.md
+.camera-guard/
