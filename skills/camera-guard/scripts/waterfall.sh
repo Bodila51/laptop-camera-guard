@@ -17,6 +17,6 @@ while :; do find /System/Library /usr/lib /Applications -type f 2>/dev/null; don
   printf "\e[90m%02d:%02d:%02d.%03d \e[36m[%-4s] \e[%dm0x%08X  %s\e[0m\n", @l[2,1,0], (time*1000)%1000, $t[$i%8], $c[rand @c], (-s $_)||0, $_;
   sleep $ENV{SLEEP};
   if ($ENV{EVERY} > 0 && @art && time-$last >= $ENV{EVERY}) {
-    $k++; printf "\n\e[31m[CAM ] webcam_capture_%02d.jpg   EXAMPLE - demo frame, not from this Mac\e[0m\n", $k;
+    $k++; print "\n";
     print $art[$k % @art]; sleep 1.5; $last=time;
   }'
