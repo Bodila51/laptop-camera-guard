@@ -1,7 +1,9 @@
 # camera-guard live scan: a fast, colourful, READ-ONLY walk through every place Windows keeps traces of
 # camera/microphone access, remote access and autostarts. Every printed line is a real check on this machine.
 # Changes nothing. Usage: powershell -ExecutionPolicy Bypass -File scan-live.ps1 [-Delay 8]
-param([int]$Delay = 8)
+param([int]$Delay = 8, [switch]$Demo)
+# -Demo: after the real scan, show clearly-labelled EXAMPLE images (from %USERPROFILE%\.camera-guard\demo\)
+# to illustrate what a webcam-capture finding would look like. They are not findings from this machine.
 
 $ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = 'camera-guard'
@@ -117,3 +119,29 @@ Write-Host ("remote-access sessions logged:  {0}" -f $found.remote) -ForegroundC
 Write-Host ("unsigned programs running/auto: {0}" -f $found.unsigned) -ForegroundColor ($(if ($found.unsigned) { 'Yellow' } else { 'Green' }))
 Write-Host ("suspicious camera/mic entries:  {0}" -f $found.suspicious) -ForegroundColor ($(if ($found.suspicious) { 'Red' } else { 'Green' }))
 Write-Host "Note: this shows who accessed the camera/mic and when. It cannot prove nobody ever did." -ForegroundColor DarkGray
+
+if ($Demo) {
+    $dir = Join-Path $env:USERPROFILE '.camera-guard\demo'
+    $imgs = Get-ChildItem $dir -Include *.jpg, *.jpeg, *.png -Recurse
+    Write-Host ""
+    Write-Host "EXAMPLE ONLY: what a webcam-capture finding would look like (demo images, not from this PC)" -ForegroundColor Red
+    foreach ($i in $imgs) { Line 'EXAMPLE' ("webcam_capture_{0}.jpg  (demo)" -f $i.BaseName) 'Red'; Start-Sleep -Milliseconds 250 }
+    if ($imgs) {
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+        $f = New-Object Windows.Forms.Form
+        $f.Text = 'camera-guard · EXAMPLE'; $f.BackColor = 'Black'; $f.WindowState = 'Maximized'; $f.FormBorderStyle = 'None'; $f.KeyPreview = $true
+        $f.Add_KeyDown({ $f.Close() }); $f.Add_Click({ $f.Close() })
+        $flow = New-Object Windows.Forms.FlowLayoutPanel; $flow.Dock = 'Fill'; $flow.BackColor = 'Black'
+        foreach ($i in $imgs) {
+            $pb = New-Object Windows.Forms.PictureBox
+            $pb.Image = [Drawing.Image]::FromFile($i.FullName); $pb.SizeMode = 'Zoom'; $pb.Width = 600; $pb.Height = 340; $pb.Margin = 12
+            $pb.Add_Click({ $f.Close() })
+            $flow.Controls.Add($pb)
+        }
+        $lbl = New-Object Windows.Forms.Label
+        $lbl.Text = 'EXAMPLE · demo images · not from this computer'; $lbl.ForeColor = 'Red'; $lbl.BackColor = 'Black'
+        $lbl.Font = New-Object Drawing.Font('Segoe UI', 18, [Drawing.FontStyle]::Bold); $lbl.Dock = 'Bottom'; $lbl.Height = 50; $lbl.TextAlign = 'MiddleCenter'
+        $f.Controls.Add($flow); $f.Controls.Add($lbl)
+        [void]$f.ShowDialog()
+    }
+}
